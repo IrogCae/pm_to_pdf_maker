@@ -9,7 +9,8 @@ The script uses only the Python standard library.
 Run the script from the project directory:
 
 ```bash
-python3 pm_to_pdf_maker/excel_to_pdf.py
+python3 src/excel_to_pdf.py
 ```
 
-PDF files will be created in `pm_to_pdf_maker/pdf_output/`.
+The Excel workbook must be located at `data/PROJECT MANAGEMENT.xlsx` and
+PDF files will be created in `pdf_output/`.
