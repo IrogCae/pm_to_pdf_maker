@@ -3,13 +3,13 @@ import pandas as pd
 from fpdf import FPDF
 
 # Caminho do arquivo Excel enviado
-excel_path = "/mnt/data/PROJECT MANAGEMENT.xlsx"
+excel_path = "C:\\Users\\irogc\\OneDrive\\Documentos\\Python Scripts\\pm_to_pdf_maker\\data\\PROJECT MANAGEMENT.xlsx"
 
 # Lê apenas a aba 'ENTREGAS', considerando que o cabeçalho está na linha 3 (index 2)
 df_entregas = pd.read_excel(excel_path, sheet_name='ENTREGAS', header=2)
 
 # Cria a pasta principal onde os PDFs serão salvos
-main_folder = "/mnt/data/pm_to_pdf_maker"
+main_folder = "C:\\Users\\irogc\\OneDrive\\Documentos\\Python Scripts\\pm_to_pdf_maker"
 os.makedirs(main_folder, exist_ok=True)
 
 # Define a classe para criação de PDF
