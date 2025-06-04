@@ -156,8 +156,9 @@ def write_pdf(path, lines):
 # ---------------------------------------------------------------------------
 
 def main():
-    xlsx_path = os.path.join(os.path.dirname(__file__), "PROJECT MANAGEMENT.xlsx")
-    out_dir = os.path.join(os.path.dirname(__file__), "pdf_output")
+    root_dir = os.path.dirname(os.path.dirname(__file__))
+    xlsx_path = os.path.join(root_dir, "data", "PROJECT MANAGEMENT.xlsx")
+    out_dir = os.path.join(root_dir, "pdf_output")
     os.makedirs(out_dir, exist_ok=True)
 
     headers, rows = read_entregas_sheet(xlsx_path)
