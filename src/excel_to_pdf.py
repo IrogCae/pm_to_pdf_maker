@@ -1,26 +1,10 @@
-# coding: utf-8
-"""Simple Excel to PDF converter using only the Python standard library.
-
-This script reads data from the sheet ``ENTREGAS`` inside ``PROJECT MANAGEMENT.xlsx``
-located in the same directory. The headers are defined in row 3 and each
-subsequent row forms a separate PDF file containing the values for all columns.
-
-Because third-party libraries are unavailable in this environment, the script
-implements minimal XLSX parsing and a very small PDF generator from scratch.
-"""
-
 import sys
 import os
 import xml.etree.ElementTree as ET
 import zipfile
 
-
-# ---------------------------------------------------------------------------
-# Utilities for XLSX parsing
-# ---------------------------------------------------------------------------
-
 def _load_shared_strings(z):
-    """Return list of shared strings from an open ZipFile ``z``."""
+    """Retorna lista de shared strings a partir de um ZipFile aberto."""
     try:
         xml = ET.fromstring(z.read("xl/sharedStrings.xml"))
     except KeyError:
@@ -34,7 +18,7 @@ def _load_shared_strings(z):
 
 
 def _column_index(cell_ref):
-    """Convert an Excel column letter reference (e.g. 'A', 'AB') to zero-based index."""
+    """Converte referência de coluna Excel (ex: 'A', 'AB') para índice zero-based."""
     col = ''.join(filter(str.isalpha, cell_ref))
     idx = 0
     for ch in col:
@@ -43,7 +27,7 @@ def _column_index(cell_ref):
 
 
 def _read_sheet(z, sheet_path, shared_strings):
-    """Return list of rows, each row is list of cell values."""
+    """Retorna lista de rows, onde cada row é uma lista de valores."""
     xml = ET.fromstring(z.read(sheet_path))
     ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
     rows = []
@@ -60,7 +44,6 @@ def _read_sheet(z, sheet_path, shared_strings):
             else:
                 val = v.text
             row_values[idx] = val
-        # convert to list while filling missing cells
         if row_values:
             max_idx = max(row_values.keys())
             row_list = [row_values.get(i, "") for i in range(max_idx + 1)]
@@ -69,10 +52,15 @@ def _read_sheet(z, sheet_path, shared_strings):
 
 
 def read_entregas_sheet(xlsx_path):
-    """Read sheet 'ENTREGAS' from ``xlsx_path``. Return (headers, data_rows)."""
+    """
+    Lê a sheet 'ENTREGAS' do xlsx_path e retorna (headers, data_rows).
+    O cabeçalho é considerado na linha de índice 2 (3a linha do Excel),
+    e as linhas de dados a partir da 4a linha.
+    """
     with zipfile.ZipFile(xlsx_path) as z:
         shared_strings = _load_shared_strings(z)
-        # find sheet path for ENTREGAS
+
+        # Procura, dentro de workbook.xml, pela sheet chamada "ENTREGAS"
         wb = ET.fromstring(z.read("xl/workbook.xml"))
         ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         rid = None
@@ -81,7 +69,9 @@ def read_entregas_sheet(xlsx_path):
                 rid = sheet.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
                 break
         if not rid:
-            raise ValueError("Sheet 'ENTREGAS' not found")
+            raise ValueError("Sheet 'ENTREGAS' não encontrada")
+
+        # Agora encontramos, em workbook.xml.rels, qual o Target para esse rId
         rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
         nsr = {"r": "http://schemas.openxmlformats.org/package/2006/relationships"}
         target = None
@@ -90,27 +80,28 @@ def read_entregas_sheet(xlsx_path):
                 target = rel.get("Target")
                 break
         if not target:
-            raise ValueError("Relationship for sheet 'ENTREGAS' not found")
+            raise ValueError("Relacionamento para sheet 'ENTREGAS' não encontrado")
+
         sheet_path = os.path.join("xl", target)
         rows = _read_sheet(z, sheet_path, shared_strings)
         if len(rows) < 4:
             return [], []
-        headers = rows[2]  # header row is the third row (index 2)
-        data_rows = rows[3:]  # rows with information start at row 4
+        headers = rows[2]    # cabeçalho na 3a linha (índice 2)
+        data_rows = rows[3:] # dados a partir da 4a linha (índice ≥3)
         return headers, data_rows
 
 
-# ---------------------------------------------------------------------------
-# Minimal PDF generation
-# ---------------------------------------------------------------------------
-
 def _escape(text):
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\r", "").replace("\n", "\\n")
+    return text.replace("\\", "\\\\") \
+               .replace("(", "\\(") \
+               .replace(")", "\\)") \
+               .replace("\r", "") \
+               .replace("\n", "\\n")
 
 
 def write_pdf(path, lines):
-    """Create a very small PDF file at ``path`` containing ``lines`` of text."""
-    # build page content
+    """Cria um PDF mínimo em `path` com as linhas contidas em `lines`."""
+    # Monta o conteúdo da página (em coordenadas “y” decrescentes):
     y = 750
     content_lines = ["BT", "/F1 12 Tf"]
     for line in lines:
@@ -119,11 +110,14 @@ def write_pdf(path, lines):
     content_lines.append("ET")
     content_stream = "\n".join(content_lines) + "\n"
 
+    # Define os objetos básicos do PDF
     objects = [
         "<< /Type /Catalog /Pages 2 0 R >>",
         "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-        f"<< /Length {len(content_stream.encode('utf-8'))} >>\nstream\n{content_stream}endstream",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        "/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        f"<< /Length {len(content_stream.encode('utf-8'))} >>\nstream\n"
+        f"{content_stream}endstream",
         "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
 
@@ -151,22 +145,28 @@ def write_pdf(path, lines):
         f.write(b"%%EOF")
 
 
-# ---------------------------------------------------------------------------
-# Main functionality
-# ---------------------------------------------------------------------------
-
 def main():
-    xlsx_path = os.path.join(os.path.dirname(__file__), "PROJECT MANAGEMENT.xlsx")
-    out_dir = os.path.join(os.path.dirname(__file__), "pdf_output")
+    # Monta o caminho para “data/PROJECT MANAGEMENT.xlsx” de forma dinâmica
+    script_dir = os.path.dirname(__file__)
+    xlsx_path = os.path.join(script_dir, "data", "PROJECT MANAGEMENT.xlsx")
+
+    # Caso o arquivo não exista, imprime erro e sai
+    if not os.path.isfile(xlsx_path):
+        print(f"ERRO: não encontrei o arquivo em: {xlsx_path!r}")
+        sys.exit(1)
+
+    # Pasta de saída (será criada dentro de "data/pdf_output")
+    out_dir = os.path.join(script_dir, "data", "pdf_output")
     os.makedirs(out_dir, exist_ok=True)
 
+    # Lê cabeçalhos e linhas de dados da sheet ENTREGAS
     headers, rows = read_entregas_sheet(xlsx_path)
     if not headers:
-        print("No data found.")
+        print("Nenhum dado encontrado na aba 'ENTREGAS'.")
         return
 
+    # Para cada linha, monta as linhas "Header: Valor" e cria um PDF
     for idx, row in enumerate(rows, start=1):
-        # merge headers and row values into lines
         lines = []
         for h, v in zip(headers, row):
             lines.append(f"{h}: {v}")
